@@ -3,6 +3,8 @@
 #![feature(default_alloc_error_handler)]
 #![allow(clippy::single_match)]
 
+extern crate panic_semihosting;
+
 #[allow(unused_imports)]
 #[macro_use]
 extern crate alloc;
@@ -21,30 +23,29 @@ pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
     dispatchers = [TIMER_IRQ_0])
 ]
 mod inner_app {
-  use alloc::vec::Vec;
+  use alloc::{boxed::Box, vec::Vec};
 
   use rp_pico::hal::{
     self,
     clocks::{self, ClockSource},
-    gpio,
   };
   use rtic::Mutex;
   use systick_monotonic::*;
 
   #[derive(Default)]
-  struct MyResource(u32);
-  trait MyTrait {
-    fn my_func(&self, resource_lock: impl Mutex<T = MyResource>);
+  pub struct MyResource(u32);
+  pub trait MyTrait: Send {
+    fn my_func(&self, resource_lock: &mut impl Mutex<T = MyResource>);
   }
   struct MyStructA;
   struct MyStructB;
   impl MyTrait for MyStructA {
-    fn my_func(&self, resource_lock: impl Mutex<T = MyResource>) {
+    fn my_func(&self, resource_lock: &mut impl Mutex<T = MyResource>) {
       resource_lock.lock(|r| r.0 = 1);
     }
   }
   impl MyTrait for MyStructB {
-    fn my_func(&self, resource_lock: impl Mutex<T = MyResource>) {
+    fn my_func(&self, resource_lock: &mut impl Mutex<T = MyResource>) {
       resource_lock.lock(|r| r.0 = 2);
     }
   }
@@ -53,16 +54,14 @@ mod inner_app {
   #[monotonic(binds = SysTick, default = true)]
   type MyMono = Systick<100_000>; // frequency in Hz determining granularity
 
-  type LedPin = gpio::Pin<gpio::bank0::Gpio25, gpio::Output<gpio::PushPull>>;
-
   #[shared]
   struct Shared {
-    resource: MyResource,
+    my_resource: MyResource,
   }
 
   #[local]
   struct Local {
-    trait_objects: Vec<dyn MyTrait>,
+    trait_objects: Vec<Box<dyn MyTrait>>,
   }
 
   #[init]
@@ -85,16 +84,16 @@ mod inner_app {
     .unwrap();
 
     let systick = ctx.core.SYST;
-    let systick_freq = clocks.system_clock.get_freq().integer();
+    let systick_freq = clocks.system_clock.get_freq().0;
     let mono = Systick::new(systick, systick_freq);
 
-    let resource = MyResource::default();
+    let my_resource = MyResource::default();
     let my_struct_a = MyStructA;
     let my_struct_b = MyStructB;
-    let trait_objects = vec![my_struct_a, my_struct_b];
+    let trait_objects: Vec<Box<dyn MyTrait>> = vec![Box::new(my_struct_a), Box::new(my_struct_b)];
 
     (
-      Shared { resource },
+      Shared { my_resource },
       Local { trait_objects },
       init::Monotonics(mono),
     )
@@ -102,12 +101,12 @@ mod inner_app {
 
   #[task(
         priority = 1,
-        shared = [resource],
+        shared = [my_resource],
         local = [trait_objects],
     )]
-  fn some_task(ctx: some_task::Context) {
-    for &obj in ctx.local.trait_objects {
-      obj.my_func();
+  fn some_task(mut ctx: some_task::Context) {
+    for obj in ctx.local.trait_objects {
+      obj.my_func(&mut ctx.shared.my_resource);
     }
   }
 }
