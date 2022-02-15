@@ -22,20 +22,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arcus"
-version = "0.1.0"
-dependencies = [
- "alloc-cortex-m",
- "cortex-m",
- "cortex-m-rt",
- "cortex-m-rtic",
- "panic-semihosting",
- "rp-pico",
- "rp2040-boot2",
- "systick-monotonic",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -585,6 +571,20 @@ name = "rtic-core"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9369355b04d06a3780ec0f51ea2d225624db777acbc60abd8ca4832da5c1a42"
+
+[[package]]
+name = "rtic-issue-611"
+version = "0.1.0"
+dependencies = [
+ "alloc-cortex-m",
+ "cortex-m",
+ "cortex-m-rt",
+ "cortex-m-rtic",
+ "panic-semihosting",
+ "rp-pico",
+ "rp2040-boot2",
+ "systick-monotonic",
+]
 
 [[package]]
 name = "rtic-monotonic"
